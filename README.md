@@ -1,2 +1,2 @@
 # TRAAP
-Truly Random Autonomous Agent Provider
+Truly Randomness Autonomous Agent Provider
