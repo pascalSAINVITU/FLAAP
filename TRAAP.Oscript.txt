@@ -1,0 +1,73 @@
+[ 
+/*
+# 
+## 
+###
+* 
+
+*/
+   "autonomous agent",{ 
+		init: "{
+			$aa_name = ""; 
+			$aa_owner = "O7NYCFUL5XIJTYE3O4MKGMGMTN6ATQAJ"; // could withdraw the dust is calculable.
+
+		}",
+	   	messages: {
+			cases: [
+				{ // 1. 
+					if: "{ trigger.address }",
+					init: "{ 
+						
+					}",
+					messages: [
+						{ 
+							app: 'payment', payload: {
+								asset: "{'base'}",
+								outputs: [{
+									address: "{trigger.address}", 
+									amount: "{trigger.output[[asset=base]] - 1000}" 
+								}]
+							}
+						},
+						{
+							app: "state", state: "{
+								
+							}"
+						}
+					]
+				},
+				{ // 2. 
+					if: "{ trigger.address }",
+					init: "{ 
+						
+					}",
+					messages: [
+						{ 
+							app: 'payment', payload: {
+								asset: "{'base'}",
+								outputs: [{
+									address: "{trigger.address}", 
+									amount: "{trigger.output[[asset=base]] - 1000}" 
+								}]
+							}
+						},
+						{ 
+							app: "state", state: "{
+								
+							}"
+						}
+					]
+				},
+				{ // default case
+					messages: [
+						{ 
+							app: "state", state: "{
+								bounce ("");
+							}"
+						}
+					]
+				}
+			]
+		}
+	}
+]
