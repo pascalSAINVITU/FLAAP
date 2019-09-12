@@ -1,188 +1,194 @@
-{ 
-
+{
+/*
+Check in explorer: https://testnetexplorer.obyte.org/#EaRzUQun7oaA46f/P2iDXUMErHCJrZHZDYaFyBZ37/Q=
+Agent address: 2AX6PP2KWJMDQTVX4WDTPBCEH5BXBDKC
+Check in explorer: https://testnetexplorer.obyte.org/#qXkJaSNDLRMwBugOoHyvlcvntErqr7cRJ0qdcTHYgkw=
+Agent address: DHG6Y47FRUVAMITGLX5L3SMOSVHO63S4
+*/
 	init: "{
-		$OWNER = "O7NYCFUL5XIJTYE3O4MKGMGMTN6ATQAJ"; //office_testnet_wallet
+		// admin
+			$AA_OWNER = "O7NYCFUL5XIJTYE3O4MKGMGMTN6ATQAJ"; //office_testnet_wallet
+			$AA_NAME = "FLAAP";
 		// secondary AAs
-		$THAANKS = var["BH5DTBSUYTT2JRB4P3CRGUTGVWSJQHH7"]["THAANKS_address"]; // getting user help with trigger
-		$DANAA = var["BH5DTBSUYTT2JRB4P3CRGUTGVWSJQHH7"]["DANAA_address"]; // last version of Dynamic Asset Name AA;
+			$LOPAVAA = "YICOQCAWUSFBIQGBB4HUPQ23U37RA5WG";
+			$THAANKS = var[$LOPAVAA]["THAANKS_last_version"]; // getting user help for future trigger
+			$DANAA = var[$LOPAVAA]["DANAA_last_version"]; // last version of Dynamic Asset Name AA;
 		
-		$percentage_for_helper = 0.5;  // 0.5 %
-		$attestor = '35IT3ZYKEPQSCXG2F7A7KWNRAD3SZXN4';
-
-		// lottery param
-		$ticket_price = 10000;
-		$round_buying_period = 5*60; // seconds
-		$drawing_time_delay = 5*60; // seconds
-		$drawing_time_tolerance = 5*60; // seconds
+		// forever constantes
+			$TICKET_PRICE = 10000;
+			$ROUND_BUYING_PERIOD = 5*60; // seconds
+			$DRAWING_TIME_DELAY = 5*60; // seconds
+			$DRAWING_TIME_TOLERANCE = 10*60; // seconds
+			$PERCENTAGE_FOR_HELPER = 0.5;  // 0.5 %
+			$ATTESTOR = '35IT3ZYKEPQSCXG2F7A7KWNRAD3SZXN4'; // use for not so important random number generation
 		
-		$asset = trigger.output[[asset!=base]].asset != "none" ? trigger.output[[asset!=base]].asset : "base";
-		$key = var[$DANAA][$asset||"_shortName"] otherwise $asset;
+		// input variables
+			$asset = trigger.output[[asset!=base]].asset != "none" ? trigger.output[[asset!=base]].asset : "base";
+			$key = var[$DANAA][$asset||"_shortName"] otherwise $asset;
 
-		$dead_line = var[$key||"_dead_line"] otherwise timestamp + $round_buying_period;
-
+			$dead_line = var[$key||"_dead_line"] otherwise timestamp + $ROUND_BUYING_PERIOD;
 	}",
 	messages: {
 		cases: [
-		{ 	// running, just buy ticket
-			if: "{ (timestamp < ($dead_line)) and !(var[$key||"_draw_time"]) }",
-			init: "{ 
-				if (trigger.output[[asset=$asset]] != $ticket_price)
-					bounce ("Ticket price is "||$ticket_price||" "||$key);
-			}",
-			messages: [
-				{ 
-					app: "state", state: "{
-					$nop = $key||"_number_of_players";
-					var[$nop] = !!var[$nop] ? var[$nop] + 1 : 1;
-					var[$key||"_dead_line"] = $dead_line;
-					var[$key||"_player_"||var[$nop]] = trigger.address;
-					var[$key||"_balance"] = var[$key||"_balance"] ? 
-						var[$key||"_balance"] + trigger.output[[asset=$asset]] : 
-						trigger.output[[asset=$asset]];
-					
-					// if attested address, it plays a role in the seed
-					if (attestation[[attestors=$attestor, address=trigger.address, ifnone=false]])
-						var[$key||"_seed"] = sha256(var[$key||"_seed"]||trigger.address);
+			{ if: "{ (timestamp < ($dead_line)) and !(var[$key||"_draw_time"]) }",	// running, just buy ticket
+				init: "{ 
+					if (trigger.output[[asset=$asset]] != $TICKET_PRICE)
+						bounce ("Ticket price is "||$TICKET_PRICE||" "||$key);
+				}",
+				messages: [
+					{ 
+						app: "state", state: "{
+						$nop = $key||"_number_of_players";
+						var[$nop] = !!var[$nop] ? var[$nop] + 1 : 1;
+						var[$key||"_dead_line"] = $dead_line;
+						var[$key||"_player_"||var[$nop]] = trigger.address;
+						var[$key||"_balance"] = var[$key||"_balance"] ? 
+							var[$key||"_balance"] + trigger.output[[asset=$asset]] : 
+							trigger.output[[asset=$asset]];
+						
+						// if attested address, it plays a role in the seed
+						if (attestation[[attestors=$ATTESTOR, address=trigger.address, ifnone=false]])
+							var[$key||"_seed"] = sha256(var[$key||"_seed"]||trigger.address);
 
-					response['message'] = "You have enter the lottery ^^"; 
-					}"
-				}
-			]
-		},
-		{ 	// buy last ticket and start the draw
-			if: "{ ( (timestamp > $dead_line)) and !(var[$key||"_draw_time"]) }",
-			init: "{ 
-				$buy_last_ticket = trigger.output[[asset=$asset]] >= $ticket_price;
-				if ($buy_last_ticket)
-					$reimbursement = trigger.output[[asset=$asset]] - $ticket_price;
-				else
-					$reimbursement = trigger.output[[asset=$asset]] - 1000;
-				// delay before we draw with seed based only on time variable data
-				$draw_time = timestamp + $drawing_time_delay;
-				// pick a helper from the players, but someone else or a bot will be able to trigger for the reward
-				$old_nop = var[$key||"_number_of_players"] otherwise 0;
-				$nop = $old_nop+1;
-				
-				if ($nop>1) // si un seul jouer pas tirage au sort
-					$helper = var[$key||"_player_"||number_from_seed(var[$key||"_seed"], 1, $nop )];
-				else
-					$helper = var[$key||"_player_1"];
-				
-				// calcul reward
-				$temp = round (var[$key||"_balance"] * $percentage_for_helper / 100);
-				$reward = ($temp > 10000) ? $temp : 10000;
-			}",
-			messages: [ // sending reward to the one that will trigger at the forced time
-				{
-					app: "data", payload: {
-					help:  "{ true }",
-					// private:  "{ false }",
-					helper: "{ $helper }",
-					time: "{ $draw_time }"
+						response['message'] = "You have enter the lottery ^^"; 
+						}"
 					}
-				},
-				{
-					app: "payment",payload: { asset: "{ $asset }",outputs: [
-						{  address: "{ $THAANKS }",amount: "{ $reward }" },
-						{  address: "{ trigger.address }", amount: "{ $reimbursement }" }
-					]
-					}
-				},
-				{   
-					app: "state", state: "{
-					if($buy_last_ticket)
-					{
-						var[$key||"_number_of_players"] = $nop;
-						var[$key||"_player_"||$nop] = trigger.address;
-						var[$key||"_balance"] += trigger.output[[asset=$asset]]-1000;
-						response['message'] = "You have enter the lottery, and trigger the draw ^^"; 
-					}
+				]
+			},
+			{ if: "{ ( (timestamp > $dead_line)) and !(var[$key||"_draw_time"]) }",	// buy last ticket and start the draw
+				init: "{ 
+					$buy_last_ticket = trigger.output[[asset=$asset]] >= $TICKET_PRICE;
+					if ($buy_last_ticket)
+						$reimbursement = trigger.output[[asset=$asset]] - $TICKET_PRICE;
 					else
-						response['message'] = "You have trigger the draw ^^"; 
+						$reimbursement = trigger.output[[asset=$asset]] - 1000;
+					// delay before we draw with seed based only on time variable data
+					$draw_time = timestamp + $DRAWING_TIME_DELAY;
+					// pick a helper from the players, but someone else or a bot will be able to trigger for the reward
+					$old_nop = var[$key||"_number_of_players"] otherwise 0;
+					$nop = $old_nop+1;
 					
-					var[$key||"_balance"] -= $reward;
-					var[$key||"_seed"] = $helper; // for next helper draw if necessary
-					var[$key||"_draw_time"] = $draw_time;
-					}"
-				}
-			]
-		},
-		{ 	// try to draw before draw time
-			if: "{ !!var[$key||"_draw_time"] and var[$key||"_draw_time"] > timestamp }",
-			messages: [ // sending reward to the one that will trigger at the forced time
-				{   
-					app: "state",  state: "{
-					bounce ("Too early draw time is set to "|| var[$key||"_draw_time"]);
-					}"
-				}
-			]
-		},
-		{ 	// time to draw !!
-			if: "{ !!var[$key||"_draw_time"] and timestamp < var[$key||"_draw_time"] + $drawing_time_tolerance }",
-			init: "{ 
-				// all time variable fixed in the dag
-				$timestamp =  data_feed[[oracles='OPNUXBRSSQQGHKQNEPD2GLWQYEUY5XLD', feed_name='timestamp']];
-				$total_cap =  data_feed[[oracles='F4KHJUCLJKY4JV7M5F754LAJX4EB7M4N', feed_name='TOTAL_CAP']];
-				$eth_btc_price =  data_feed[[oracles='F4KHJUCLJKY4JV7M5F754LAJX4EB7M4N', feed_name='ETH_BTC']];
+					if ($nop>1) // si un seul jouer pas tirage au sort
+						$helper = var[$key||"_player_"||number_from_seed(var[$key||"_seed"], 1, $nop )];
+					else
+						$helper = var[$key||"_player_1"];
+					
+					// calcul reward
+					$temp = round (var[$key||"_balance"] * $PERCENTAGE_FOR_HELPER / 100);
+					$reward = ($temp > 10000) ? $temp : 10000;
+				}",
+				messages: [ // sending reward to the one that will trigger at the forced time
+					{
+						app: "data", payload: {
+							ask_help:  "{ "true" }",
+							// private:  "{ false }",
+							helper: "{ $helper }",
+							requested_time: "{ $draw_time }",
+							acceptable_delay: "{ $DRAWING_TIME_TOLERANCE }",
+						}
+					},
+					{
+						app: "payment",payload: { asset: "{ $asset }",outputs: [
+							{  address: "{ $THAANKS }",amount: "{ $reward }" },
+							{  address: "{ trigger.address }", amount: "{ $reimbursement }" }
+						]	}
+					},
+					{   
+						app: "state", state: "{
+						if($buy_last_ticket)
+						{
+							var[$key||"_number_of_players"] = $nop;
+							var[$key||"_player_"||$nop] = trigger.address;
+							var[$key||"_balance"] += trigger.output[[asset=$asset]]-1000;
+							response['message'] = "You have enter the lottery, and trigger the draw ^^"; 
+						}
+						else
+							response['message'] = "You have trigger the draw ^^ "; 
+						
+						var[$key||"_balance"] -= $reward;
+						var[$key||"_seed"] = $helper; // for next helper draw if necessary
+						var[$key||"_draw_time"] = $draw_time;
+						}"
+					}
+				]
+			},
+			{ if: "{ !!var[$key||"_draw_time"] and var[$key||"_draw_time"] > timestamp }",	// try to draw before draw time
+				messages: [ // sending reward to the one that will trigger at the forced time
+					{   
+						app: "state",  state: "{
+						bounce ("Too early draw time is set to "|| var[$key||"_draw_time"]);
+						}"
+					}
+				]
+			},
+			{ if: "{ !!var[$key||"_draw_time"] and timestamp < var[$key||"_draw_time"] + $DRAWING_TIME_TOLERANCE }",	// time to draw !!
+				init: "{ 
+					// all time variable fixed in the dag
+					$timestamp =  data_feed[[oracles='OPNUXBRSSQQGHKQNEPD2GLWQYEUY5XLD', feed_name='timestamp']];
+					$total_cap =  data_feed[[oracles='F4KHJUCLJKY4JV7M5F754LAJX4EB7M4N', feed_name='TOTAL_CAP']];
+					$eth_btc_price =  data_feed[[oracles='F4KHJUCLJKY4JV7M5F754LAJX4EB7M4N', feed_name='ETH_BTC']];
 
-				// and the winner is
-				$draw_seed = $timestamp||$total_cap||$bitcoin_hash||$eth_btc_price;
-				$winner_num = number_from_seed($draw_seed, 1, $key||"_number_of_players");
-				$winner = var["_player_"||$winner_num];
-			}",
-			messages: [ // pay the guy!
-				{
-					app: "data", payload: {
-					message:  "{ "You won the lottery!" }",
+					// and the winner is
+					$draw_seed = $timestamp||$total_cap||$bitcoin_hash||$eth_btc_price;
+					$winner_num = number_from_seed($draw_seed, 1, var[$key||"_number_of_players"]);
+					$winner = var["_player_"||$winner_num];
+				}",
+				messages: [ // pay the guy!
+					{
+						app: "data", payload: {
+						message:  "{ "You won the lottery!" }",
+						}
+					},
+					{
+						app: "payment", payload: { asset: "{ $asset }", outputs: [
+						{ address: "{ $winner }", amount: "{ var[$key||"_balance"] }" }
+						]}
+					},
+					{   
+						app: "state", 
+						state: "{
+						var[$key||"_draw_time"] = false;    var[$key||"_dead_line"] = timestamp + $ROUND_BUYING_PERIOD;
+						var[$key||"_balance"] = false;      var[$key||"_number_of_players"] = false;
+						}"
 					}
-				},
-				{
-					app: "payment", payload: { asset: "{ $asset }", outputs: [
-					{ address: "{ $winner }", amount: "{ var[$key||"_balance"] }" }
-					]}
-				},
-				{   
-					app: "state", 
-					state: "{
-					var[$key||"_draw_time"] = false;    var[$key||"_dead_line"] = timestamp + $round_buying_period;
-					var[$key||"_balance"] = false;      var[$key||"_number_of_players"] = false;
-					}"
-				}
-			]
-		},
-		{ 	// too late lets pick a draw time again and hope the next helper will help
-			if: "{ !!var[$key||"_draw_time"] and timestamp > var[$key||"_draw_time"] + $drawing_time_tolerance }",
-			init: "{ 
-				// delay before we draw with seed based only on time variable data
-				$draw_time = number_from_seed(var[$key||"_seed"], $drawing_time_min, $drawing_time_max );
-				// pick a helper from the players, but someone else or a bot will be able to trigger for the reward
-				$helper = var[$key||"_player_"||number_from_seed($draw_time, 1, var[$key||"_number_of_players"])];
-				$temp = round (var[$key||"_balance"] * $percentage_for_helper / 100);
-				$reward = ($temp > 10000) ? $temp : 10000;
-			}",
-			messages: [ // sending reward to the one that will trigger at the forced time
-				{
-					app: "data", payload: {
-					help:  "{ true }",        helper: "{ $helper }",
-					time: "{ $draw_time }",   delay: "{ $drawing_time_tolerance }",
+				]
+			},
+			{ if: "{ !!var[$key||"_draw_time"] and timestamp > var[$key||"_draw_time"] + $DRAWING_TIME_TOLERANCE }",	// too late lets pick a draw time again and hope the next helper will help
+			
+				init: "{ 
+					// delay before we draw with seed based only on time variable data
+					$draw_time = number_from_seed(var[$key||"_seed"], $drawing_time_min, $drawing_time_max );
+					// pick a helper from the players, but someone else or a bot will be able to trigger for the reward
+					$helper = var[$key||"_player_"||number_from_seed($draw_time, 1, var[$key||"_number_of_players"])];
+					$temp = round (var[$key||"_balance"] * $PERCENTAGE_FOR_HELPER / 100);
+					$reward = ($temp > 10000) ? $temp : 10000;
+				}",
+				messages: [ // sending reward to the one that will trigger at the forced time
+					{
+						app: "data", payload: {
+							help:  "{ true }",        helper: "{ $helper }",
+							time: "{ $draw_time }",   delay: "{ $DRAWING_TIME_TOLERANCE }",
+						}
+					},
+					{
+						app: "payment", payload: { asset: "{ $asset }", outputs: [
+						{ address: "{ $THAANKS }", amount: "{ $reward }" },
+						]}
+					},
+					{   
+						app: "state",  state: "{
+						var[$key||"_draw_time"] = $draw_time;
+						var[$key||"_balance"] -= $reward;
+						var[$key||"_seed"] = $helper;
+						
+						response['message'] = "AA was not triggered in time, and other random draw time as been piced and a user as been asked for help."; 
+						}"
 					}
-				},
-				{
-					app: "payment", payload: { asset: "{ $asset }", outputs: [
-					{ address: "{ $THAANKS }", amount: "{ $reward }" },
-					]}
-				},
-				{   
-					app: "state",  state: "{
-					var[$key||"_draw_time"] = $draw_time;
-					var[$key||"_balance"] -= $reward;
-					var[$key||"_seed"] = $helper;
-					
-					response['message'] = "AA was not triggered in time, and other random draw time as been piced and a user as been asked for help."; 
-					}"
-				}
-			]
-		}
+				]
+			},
+			{	// default case bounce instruction
+				messages: [ { app: "state",  state: "{ bounce ($INSTRUCTIONS);}"} ]
+			}
 		]
 	}
 }
