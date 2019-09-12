@@ -16,3 +16,4 @@
 
 ## remarks
 * It could be made simplier by taking the taking the 'drawtime' = 'buy round time', and select random players and propose them a reward every time a attested player buy a ticket. But if not attested players around then nobody is asked to trigger the AA at the right time. and also the delay between the notifiation of available reward and the requested trigger time is longer.
+* You can create lottery for any type of asset
