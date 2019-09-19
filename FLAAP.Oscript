@@ -4,6 +4,21 @@ Check in explorer: https://testnetexplorer.obyte.org/#EaRzUQun7oaA46f/P2iDXUMErH
 Agent address: 2AX6PP2KWJMDQTVX4WDTPBCEH5BXBDKC
 Check in explorer: https://testnetexplorer.obyte.org/#qXkJaSNDLRMwBugOoHyvlcvntErqr7cRJ0qdcTHYgkw=
 Agent address: DHG6Y47FRUVAMITGLX5L3SMOSVHO63S4
+Check in explorer: https://testnetexplorer.obyte.org/#UUPnhXZXFth1YbBljcPGwoTcSBQbYheolEDiDJ9OMtI=
+Agent address: 53ZSJC4WOEZ4AG2S5IYZ55YMVRL6WU35
+Check in explorer: https://testnetexplorer.obyte.org/#Y6C7ajZvhFDz3XiJQXWMBkmW9tcjty78m52V7IAMn/c=
+Agent address: X2CFULIKVRUY7TSDZ6UJT2PP5VD7IA7T
+Success
+Check in explorer: https://testnetexplorer.obyte.org/#5neBarfa5sMLkVFBXssA9cSyZN8Th64bVuxVQUizeKY=
+Agent address: QTNSFC5JMQ3CLYEYTHJLFD3GF4BAP6TY
+Check in explorer: https://testnetexplorer.obyte.org/#Y00MSaX3YaqM8cwPkvAGNVpkc3HN/B478th1u2DE+hg=
+Agent address: G2BIMXCGHUL6YNKRTQQZFIYVNLA5BGUJ
+Check in explorer: https://testnetexplorer.obyte.org/#Ek7M3jxbJBnw2Rturjmpr1M6vPmznuKr8SN6BCy4DYQ=
+Agent address: VB7ZMODYNKN2DQAZQCFSNCF7OCDZECSW
+Check in explorer: https://testnetexplorer.obyte.org/#rrfEYgxJVssIQwTGDNV4G9mxXHw3YTp607CRKbFUmWs=
+Agent address: YRGXXOB6FKZOQ5BQXG6374HPWAWESAAS
+Check in explorer: https://testnetexplorer.obyte.org/#IGtWvpSITNhFWX3jZMdCSkmYiHrzzddrRgEholKZwjg=
+Agent address: 5D4R3U3GOQJBVGOFCB4LILU4ZHIKCBMQ
 */
 	init: "{
 		// admin
@@ -16,15 +31,16 @@ Agent address: DHG6Y47FRUVAMITGLX5L3SMOSVHO63S4
 		
 		// forever constantes
 			$TICKET_PRICE = 10000;
-			$ROUND_BUYING_PERIOD = 5*60; // seconds
+			$ROUND_BUYING_PERIOD = 3*60; // seconds
 			$DRAWING_TIME_DELAY = 5*60; // seconds
 			$DRAWING_TIME_TOLERANCE = 10*60; // seconds
 			$PERCENTAGE_FOR_HELPER = 0.5;  // 0.5 %
 			$ATTESTOR = '35IT3ZYKEPQSCXG2F7A7KWNRAD3SZXN4'; // use for not so important random number generation
+			$INSTRUCTIONS = "Send "|| $TICKET_PRICE ||" units to buy a ticket. ";
 		
 		// input variables
 			$asset = trigger.output[[asset!=base]].asset != "none" ? trigger.output[[asset!=base]].asset : "base";
-			$key = var[$DANAA][$asset||"_shortName"] otherwise $asset;
+			$key = var[$DANAA][$asset||"_ticker"] otherwise $asset;
 
 			$dead_line = var[$key||"_dead_line"] otherwise timestamp + $ROUND_BUYING_PERIOD;
 	}",
@@ -69,20 +85,29 @@ Agent address: DHG6Y47FRUVAMITGLX5L3SMOSVHO63S4
 					$nop = $old_nop+1;
 					
 					if ($nop>1) // si un seul jouer pas tirage au sort
-						$helper = var[$key||"_player_"||number_from_seed(var[$key||"_seed"], 1, $nop )];
+					{
+						$random_number = number_from_seed(var[$key||"_seed"], 1, $old_nop);
+						$helper = var[$key||"_player_"||$random_number];
+					}
 					else
 						$helper = var[$key||"_player_1"];
 					
 					// calcul reward
 					$temp = round (var[$key||"_balance"] * $PERCENTAGE_FOR_HELPER / 100);
 					$reward = ($temp > 10000) ? $temp : 10000;
+
+					
+					if (!!trigger.data.debug)
+					{
+						bounce ($nop||"  "||$random_number||"  "||$key);
+					}
 				}",
 				messages: [ // sending reward to the one that will trigger at the forced time
 					{
 						app: "data", payload: {
+							helper: "{ $helper }",
 							ask_help:  "{ "true" }",
 							// private:  "{ false }",
-							helper: "{ $helper }",
 							requested_time: "{ $draw_time }",
 							acceptable_delay: "{ $DRAWING_TIME_TOLERANCE }",
 						}
@@ -157,9 +182,9 @@ Agent address: DHG6Y47FRUVAMITGLX5L3SMOSVHO63S4
 			
 				init: "{ 
 					// delay before we draw with seed based only on time variable data
-					$draw_time = number_from_seed(var[$key||"_seed"], $drawing_time_min, $drawing_time_max );
+					$draw_time = timestamp + $DRAWING_TIME_DELAY;
 					// pick a helper from the players, but someone else or a bot will be able to trigger for the reward
-					$helper = var[$key||"_player_"||number_from_seed($draw_time, 1, var[$key||"_number_of_players"])];
+					$helper = var[$key||"_player_"||number_from_seed(var[$key||"_seed"], 1, var[$key||"_number_of_players"])];
 					$temp = round (var[$key||"_balance"] * $PERCENTAGE_FOR_HELPER / 100);
 					$reward = ($temp > 10000) ? $temp : 10000;
 				}",
@@ -187,7 +212,7 @@ Agent address: DHG6Y47FRUVAMITGLX5L3SMOSVHO63S4
 				]
 			},
 			{	// default case bounce instruction
-				messages: [ { app: "state",  state: "{ bounce ($INSTRUCTIONS);}"} ]
+				messages: [ { app: "state",  state: "{ bounce ($INSTRUCTIONS ||$key);}"} ]
 			}
 		]
 	}
